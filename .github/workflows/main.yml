@@ -18,13 +18,17 @@ jobs:
           RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
           TS_AUTHKEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
+          $ErrorActionPreference = "Stop"
+
           if ([string]::IsNullOrWhiteSpace($env:RDP_PASSWORD)) {
-            throw "Missing required secret: RDP_PASSWORD"
+            throw "RDP_PASSWORD is missing. Add it in Repository Settings > Secrets and variables > Actions."
           }
 
           if ([string]::IsNullOrWhiteSpace($env:TS_AUTHKEY)) {
-            throw "Missing required secret: TAILSCALE_AUTH_KEY"
+            throw "TAILSCALE_AUTH_KEY is missing. Add it in Repository Settings > Secrets and variables > Actions."
           }
+
+          Write-Output "Required secrets are available."
 
       - name: Install and connect Tailscale
         shell: pwsh
@@ -32,7 +36,6 @@ jobs:
           TS_AUTHKEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
           $ErrorActionPreference = "Stop"
-
           $installer = Join-Path $env:TEMP "tailscale.msi"
 
           try {
@@ -40,19 +43,13 @@ jobs:
               -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" `
               -OutFile $installer
 
-            $process = Start-Process `
+            $proc = Start-Process `
               -FilePath "msiexec.exe" `
-              -ArgumentList @(
-                "/i",
-                "`"$installer`"",
-                "/quiet",
-                "/norestart"
-              ) `
-              -Wait `
-              -PassThru
+              -ArgumentList "/i `"$installer`" /quiet /norestart" `
+              -Wait -PassThru
 
-            if ($process.ExitCode -notin @(0, 3010)) {
-              throw "Tailscale installation failed."
+            if ($proc.ExitCode -notin @(0, 3010)) {
+              throw "Tailscale installation failed. Exit code: $($proc.ExitCode)"
             }
 
             $ts = Join-Path $env:ProgramFiles "Tailscale\tailscale.exe"
@@ -61,9 +58,7 @@ jobs:
               throw "Tailscale executable was not found."
             }
 
-            & $ts up `
-              "--authkey=$env:TS_AUTHKEY" `
-              "--hostname=github-rdp-$env:GITHUB_RUN_ID"
+            & $ts up "--authkey=$env:TS_AUTHKEY" "--hostname=github-rdp-$env:GITHUB_RUN_ID"
 
             if ($LASTEXITCODE -ne 0) {
               throw "Tailscale connection failed."
@@ -72,10 +67,10 @@ jobs:
             $ip = & $ts ip -4
 
             if ($LASTEXITCODE -ne 0 -or -not $ip) {
-              throw "Unable to obtain Tailscale IPv4 address."
+              throw "Could not obtain Tailscale IPv4 address."
             }
 
-            Write-Output "Tailscale connected successfully."
+            Write-Output "Tailscale connection succeeded."
             Write-Output "Tailscale IPv4: $ip"
           }
           finally {
@@ -92,15 +87,14 @@ jobs:
           $securePassword = ConvertTo-SecureString `
             $env:RDP_PASSWORD -AsPlainText -Force
 
-          $user = Get-LocalUser `
-            -Name "RDP" `
+          $user = Get-LocalUser -Name "RDP" `
             -ErrorAction SilentlyContinue
 
           if ($null -eq $user) {
-            New-LocalUser `
+            $user = New-LocalUser `
               -Name "RDP" `
               -Password $securePassword `
-              -AccountNeverExpires | Out-Null
+              -AccountNeverExpires
           }
           else {
             Set-LocalUser `
@@ -108,14 +102,16 @@ jobs:
               -Password $securePassword
           }
 
-          $member = Get-LocalGroupMember `
-            -Group "Remote Desktop Users" `
-            -ErrorAction Stop |
-            Where-Object { $_.Name -eq "$env:COMPUTERNAME\RDP" }
+          $group = Get-LocalGroup -SID "S-1-5-32-555"
 
-          if (-not $member) {
+          $members = Get-LocalGroupMember `
+            -Group $group.Name
+
+          $userSid = (Get-LocalUser -Name "RDP").SID.Value
+
+          if ($members.SID.Value -notcontains $userSid) {
             Add-LocalGroupMember `
-              -Group "Remote Desktop Users" `
+              -Group $group.Name `
               -Member "RDP"
           }
 
