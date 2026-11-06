@@ -84,9 +84,9 @@ jobs:
             Write-Error "TCP connection to RDP port 3389 failed"
             exit 1
           }
-          Write-Host "TCP connectivity successful!"     
-          
-          - name: Maintain Connection
+          Write-Host "TCP connectivity successful!"
+
+      - name: Maintain Connection
         shell: powershell
         run: |
           Write-Host "=== RDP ACCESS ==="
