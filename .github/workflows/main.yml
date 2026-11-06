@@ -84,17 +84,15 @@ jobs:
             Write-Error "TCP connection to RDP port 3389 failed"
             exit 1
           }
-          Write-Host "TCP connectivity successful!"
-
-      - name: Maintain Connection
+          Write-Host "TCP connectivity successful!"     
+          
+          - name: Maintain Connection
+        shell: powershell
         run: |
-          Write-Host "`n=== RDP ACCESS ==="
+          Write-Host "=== RDP ACCESS ==="
           Write-Host "Address: $env:TAILSCALE_IP"
           Write-Host "Username: RDP"
-          Write-Host "Password: $(echo$env:RDP_CREDS)"
-          Write-Host "==================`n"
-          # Keep runner active indefinitely (or until manually cancelled)
+          Write-Host "Password is stored securely in GitHub Secrets"
           while ($true) {
-            Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
-            Start-Sleep -Seconds 300
+            Start-Sleep -Seconds 60
           }
