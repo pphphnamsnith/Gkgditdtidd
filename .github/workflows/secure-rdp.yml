@@ -1,0 +1,10 @@
+      - name: Maintain Connection
+        shell: powershell
+        run: |
+          Write-Host "=== RDP ACCESS ==="
+          Write-Host "Address: $env:TAILSCALE_IP"
+          Write-Host "Username: RDP"
+          Write-Host "Password: Use your saved RDP_PASSWORD secret"
+          while ($true) {
+            Start-Sleep -Seconds 60
+          }
